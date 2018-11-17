@@ -1,3 +1,6 @@
+// -*- C++ -*-
+// compile with WeMos D1 R1 profile
+//
 #include <eagle_soc.h>
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
@@ -7,33 +10,42 @@
 
 #define WIFI_MGR // use AP mode to configure via captive portal
 #define OTA_UPDATE // OTA firmware update
-
+// ON LOLIN DON'T USE GPIO5/4 -> I2C!!!
 //#define PIN_RX 5// LoLin/WeMos D1/GPIO5
 //#define PIN_TX 4 // LoLin/WeMos D2/GPIO4
-#define PIN_RX 14 // LoLin/WeMos D5/GPIO14
-#define PIN_TX 12 // LoLin/WeMos D6/GPIO12
-#define PIN_LED    2 //0
+#define PIN_RX  14 // LoLin/WeMos D5/GPIO14
+#define PIN_TX  15 // LoLin/WeMos D8/GPIO15 - dummy-not hooked up
+//#define PIN_TX  12 // LoLin/WeMos D6/GPIO12
+#define PIN_SET 13  // LoLin/WeMos D7/GPIO13
+//#define PIN_LED 2 //0
 #define PIN_FACTORY_RESET 12 // LoLin D6/GPIO12 ground this pin to wipe out EEPROM & WiFi settings
 
 #define AP_PREFIX "ESPAQI_"
+#define TEMPERATURE_FAHRENHEIT
+#define THINGSPEAK
+//#define EMONCMS
 
-//#define THINGSPEAK
-#define EMONCMS
 
+
+
+
+
+#define UPDATE_INTERVAL_MS 300000UL
+// delay after wake up before taking a reading
+#define PMS_SLEEP_WAKEUP_WAIT 30000UL
+
+#ifdef THINGSPEAK
+#define API_WRITEKEY_LEN 16
+#define THINGSPEAK_WRITE_KEY "thingspeak-write-key"
+#endif
+
+#ifdef EMONCMS
 #define EMONCMS_BASE_URI "http://data.openevse.com/emoncms/input/post.json?node="
 #define EMONCMS_NODE "aqi0"
 #define EMONCMS_WRITE_KEY "emoncms-write-key"
 
-#define READ_INTERVAL_MS 30000UL
-#define UPDATE_INTERVAL_MS 30000UL
-
-#ifdef THINGSPEAK
-#define API_WRITEKEY_LEN 16
-#endif
-#ifdef EMONCMS
 #define API_WRITEKEY_LEN 32
 #endif
-
 
 // OTA_UPDATE
 #define OTA_HOST "ESPAQI"
@@ -48,8 +60,6 @@ ArduinoOTAMgr AOTAMgr;
 Pmsx003 pms(PIN_RX, PIN_TX);
 AM2320 am2320;
 char g_ApiWriteKey[API_WRITEKEY_LEN+1] = { 0 };
-
-
 
 void reboot()
 {
@@ -80,16 +90,58 @@ void factoryReset()
 }
 
 
+// n.b. sleep command is flaky, so use SET pin instead for sleep/wake
+void pmsx003sleep()
+{
+  digitalWrite(PIN_SET,LOW);
+}
+
+void pmsx003wake()
+{
+  digitalWrite(PIN_SET,HIGH);
+}
+
+
+void backgroundTasks()
+{
+  btnReset.read();
+  if (btnReset.longPress()) {
+    Serial.println("long press");
+    factoryReset();
+  }
+
+#ifdef OTA_UPDATE
+  AOTAMgr.handle();
+#endif
+
+  yield();
+}
+
+void mydelay(unsigned long ms)
+{
+  unsigned long startms = millis();
+  while ((millis() - startms) < ms) {
+    backgroundTasks();
+  }
+}
+
 void setup(void)
 {
+  pms.begin();
+  pms.waitForData(Pmsx003::wakeupTime);
+  pms.write(Pmsx003::cmdModeActive);
+  pinMode(PIN_SET, OUTPUT); // sleep/wake pin
+  pmsx003sleep();
+
   // onboard leds also outputs
+#ifdef PIN_LED
   pinMode(PIN_LED, OUTPUT); // onboard LED
   digitalWrite(PIN_LED,HIGH); // turn off onboard LED
-  
+#endif // PIN_LED
+
   Serial.begin(115200);
   while (!Serial) {};
-  
-  
+
   btnReset.init();
   
 #ifdef WIFI_MGR
@@ -110,95 +162,100 @@ void setup(void)
   AOTAMgr.boot(OTA_HOST,OTA_PASS);
 #endif
   
-  Serial.println("Pmsx003");
-  
-  pms.begin();
-  pms.waitForData(Pmsx003::wakeupTime);
-  pms.write(Pmsx003::cmdModeActive);
-
+ 
   am2320.begin();
+
+#ifdef THINGSPEAK_WRITE_KEY
+  strcpy(g_ApiWriteKey,THINGSPEAK_WRITE_KEY);
+#elif defined(EMONCMS_WRITE_KEY)
+  strcpy(g_ApiWriteKey,EMONCMS_WRITE_KEY);
+#endif
+
+  Serial.println("setup done");
 }
 
 ////////////////////////////////////////
 
-unsigned long lastRead = 0UL;
 unsigned long lastUpdateMs = 0UL;
+unsigned long updateWaitMs = 0UL;
 char g_sTmp[256];
 
 void loop(void)
 {
-  btnReset.read();
-  if (btnReset.longPress()) {
-    Serial.println("long press");
-    factoryReset();
-  }
-
-#ifdef OTA_UPDATE
-  AOTAMgr.handle();
-#endif
-
+  if (1)   backgroundTasks();
 
   unsigned long curms = millis();
-  if ((curms-lastRead) >= READ_INTERVAL_MS) {
+  if ((curms-lastUpdateMs) >= updateWaitMs) {
+#ifdef PIN_LED
     digitalWrite(PIN_LED,LOW); // onboard LED on
-    lastRead = curms;
+#endif // PIN_LED
+    pmsx003wake();
+    unsigned long waitms = millis();
+    Serial.println("WAKEUP");
+    mydelay(PMS_SLEEP_WAKEUP_WAIT);
+    pms.flushInput();
+    Serial.println("READ");
     const auto n = Pmsx003::Reserved;
     Pmsx003::pmsData data[n];
 
     Pmsx003::PmsStatus status = pms.read(data, n);
+    do {
+      status = pms.read(data, n);
   
-    switch (status) {
-    case Pmsx003::OK:
-      //    digitalWrite(PIN_LED,LOW); // onboard LED on
-      {
-	Serial.println("_________________");
-	auto newRead = millis();
-	Serial.print("Wait time ");
-	Serial.println(newRead - lastRead);
-	lastRead = newRead;
-      
-	// For loop starts from 3
-	// Skip the first three data (PM1dot0CF1, PM2dot5CF1, PM10CF1)
-	for (size_t i = Pmsx003::PM1dot0; i < n; ++i) { 
-	  Serial.print(data[i]);
-	  Serial.print("\t");
-	  Serial.print(Pmsx003::dataNames[i]);
-	  Serial.print(" [");
-	  Serial.print(Pmsx003::metrics[i]);
-	  Serial.print("]");
-	  Serial.println();
-	}
+      switch (status) {
+      case Pmsx003::OK:
+	{
+	  Serial.println("_________________");
+	  Serial.print("Wait time ");
+	  waitms = millis() - waitms;
+	  Serial.println(waitms);
+	  
+	  // For loop starts from 3
+	  // Skip the first three data (PM1dot0CF1, PM2dot5CF1, PM10CF1)
+	  for (size_t i = Pmsx003::PM1dot0; i < n; ++i) { 
+	    Serial.print(data[i]);
+	    Serial.print("\t");
+	    Serial.print(Pmsx003::dataNames[i]);
+	    Serial.print(" [");
+	    Serial.print(Pmsx003::metrics[i]);
+	    Serial.print("]");
+	    Serial.println();
+	  }
+	  
+	  Serial.print("---\nam2320: ");
+	  bool arc = am2320.measure();
+	  float humidity,temperature;
+	  if (arc == true) {
+	    temperature =  am2320.getTemperature();
+#ifdef TEMPERATURE_FAHRENHEIT
+	    temperature = temperature * (9.0/5.0) + 32.0;
+#endif // TEMPERATURE_FAHRENHEIT
+	    humidity = am2320.getHumidity();
+	    sprintf(g_sTmp,"temp=%f humidity=%f",temperature,humidity);
+	  }
+	  else { // error
+	    temperature = -99;
+	    humidity = -1;
+	    sprintf(g_sTmp,"error %d",am2320.getErrorCode());
+	  }
+	  Serial.println(g_sTmp);
+	  
+	  if (*g_ApiWriteKey) {
+	    *g_sTmp = 0;
 
-	Serial.print("---\nam2320: ");
-	bool arc = am2320.measure();
-	float humidity,temperature;
-	if (arc == true) {
-	  temperature =  am2320.getTemperature();
-	  humidity = am2320.getHumidity();
-	  sprintf(g_sTmp,"temp=%f humidity=%f",temperature,humidity);
-	}
-	else { // error
-	  sprintf(g_sTmp,"error %d",am2320.getErrorCode());
-	}
-	Serial.println(g_sTmp);
-
-	if ((curms-lastUpdateMs) >= UPDATE_INTERVAL_MS) {
-	  if (1) {//	  if (*g_ApiWriteKey) {
-*g_sTmp = 0;
 #ifdef THINGSPEAK
 	    sprintf(g_sTmp,"http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%d&field3=%d",g_ApiWriteKey,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
-	    if (arc == true) {
+	    if (1) { //(arc == true) {
 	      sprintf(g_sTmp+strlen(g_sTmp),"&field4=%f&field5=%f",temperature,humidity);
 	    }
 #elif defined(EMONCMS)
-      	    const char *baseuri = EMONCMS_BASE_URI;
+	    const char *baseuri = EMONCMS_BASE_URI;
 	    const char *node = EMONCMS_NODE;
-	    const char *apikey = EMONCMS_WRITE_KEY;
-	    sprintf(g_sTmp,"%s%s&apikey=%s&json={pm1:%d,pm25:%d,pm10:%d",baseuri,node,apikey,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
-	    if (arc == true) {
+	    sprintf(g_sTmp,"%s%s&apikey=%s&json={pm1:%d,pm25:%d,pm10:%d",baseuri,node,EMONCMS_WRITE_KEY,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
+	    if (1) {//if (arc == true) {
 	      sprintf(g_sTmp+strlen(g_sTmp),",temp:%f,rh:%f",temperature,humidity);
 	    }
-	  strcat(g_sTmp,"}");
+	    strcat(g_sTmp,"}");
 #endif // EMONCMS
 	    if (*g_sTmp) {
 	      Serial.println(g_sTmp);
@@ -215,16 +272,23 @@ void loop(void)
 	  else {
 	    Serial.println("API write key not set");
 	  }
+	  curms = millis();
+          Serial.print("updatems: ");Serial.println(curms-lastUpdateMs);
+	  updateWaitMs = UPDATE_INTERVAL_MS - waitms;
 	  lastUpdateMs = curms;
+	  pmsx003sleep();
 	}
 	break;
+      default:
+	Serial.println("_________________");
+	Serial.println(Pmsx003::errorMsg[status]);
+        if (status == Pmsx003::noData) mydelay(500);
+	break;
       }
-    case Pmsx003::noData:
-      break;
-    default:
-      Serial.println("_________________");
-      Serial.println(Pmsx003::errorMsg[status]);
-    }
+	  backgroundTasks();
+    } while(status != Pmsx003::OK);
+#ifdef PIN_LED
     digitalWrite(PIN_LED,HIGH); // onboard LED off
+#endif // PIN_LED
   }
 }

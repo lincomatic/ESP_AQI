@@ -155,7 +155,6 @@ void WifiConfigurator::StartManager(void)
 
   //if you get here you have connected to the WiFi
 
-  //  digitalWrite(PIN_LED,LOW); // turn on LED
   Serial.print("CONNECTED to ");
   Serial.println(WiFi.SSID());
   Serial.print("IP address: ");
