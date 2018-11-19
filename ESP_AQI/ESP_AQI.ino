@@ -22,8 +22,8 @@
 
 #define AP_PREFIX "ESPAQI_"
 #define TEMPERATURE_FAHRENHEIT
-#define THINGSPEAK
-//#define EMONCMS
+//#define THINGSPEAK
+#define EMONCMS
 
 
 
@@ -36,14 +36,15 @@
 
 #ifdef THINGSPEAK
 #define API_WRITEKEY_LEN 16
-#define THINGSPEAK_WRITE_KEY "thingspeak-write-key"
+//#define THINGSPEAK_WRITE_KEY "thingspeak-write-key"
 #endif
 
 #ifdef EMONCMS
-#define EMONCMS_BASE_URI "http://data.openevse.com/emoncms/input/post.json?node="
 #define EMONCMS_NODE "aqi0"
-#define EMONCMS_WRITE_KEY "emoncms-write-key"
-
+//#define EMONCMS_WRITE_KEY "emoncms-write-key"
+//#define EMONCMS_BASE_URI "http://data.openevse.com/emoncms/input/post.json?node="
+#define EMONCMS
+#define EMONCMS_BASE_URI "http://www.lincomatic.com/emoncms/input/post.json?node="
 #define API_WRITEKEY_LEN 32
 #endif
 
@@ -212,7 +213,7 @@ void loop(void)
 	  
 	  // For loop starts from 3
 	  // Skip the first three data (PM1dot0CF1, PM2dot5CF1, PM10CF1)
-	  for (size_t i = Pmsx003::PM1dot0; i < n; ++i) { 
+	  for (size_t i = 0; i < n; ++i) { 
 	    Serial.print(data[i]);
 	    Serial.print("\t");
 	    Serial.print(Pmsx003::dataNames[i]);
@@ -231,11 +232,11 @@ void loop(void)
 	    temperature = temperature * (9.0/5.0) + 32.0;
 #endif // TEMPERATURE_FAHRENHEIT
 	    humidity = am2320.getHumidity();
-	    sprintf(g_sTmp,"temp=%f humidity=%f",temperature,humidity);
+	    sprintf(g_sTmp,"temp=%0.0f humidity=%0.0f",temperature,humidity);
 	  }
 	  else { // error
-	    temperature = -99;
-	    humidity = -1;
+	    //	    temperature = -99;
+	    //	    humidity = -1;
 	    sprintf(g_sTmp,"error %d",am2320.getErrorCode());
 	  }
 	  Serial.println(g_sTmp);
@@ -246,14 +247,14 @@ void loop(void)
 #ifdef THINGSPEAK
 	    sprintf(g_sTmp,"http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%d&field3=%d",g_ApiWriteKey,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
 	    if (1) { //(arc == true) {
-	      sprintf(g_sTmp+strlen(g_sTmp),"&field4=%f&field5=%f",temperature,humidity);
+	      sprintf(g_sTmp+strlen(g_sTmp),"&field4=%0.0f&field5=%0.0f",temperature,humidity);
 	    }
 #elif defined(EMONCMS)
 	    const char *baseuri = EMONCMS_BASE_URI;
 	    const char *node = EMONCMS_NODE;
-	    sprintf(g_sTmp,"%s%s&apikey=%s&json={pm1:%d,pm25:%d,pm10:%d",baseuri,node,EMONCMS_WRITE_KEY,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
-	    if (1) {//if (arc == true) {
-	      sprintf(g_sTmp+strlen(g_sTmp),",temp:%f,rh:%f",temperature,humidity);
+	    sprintf(g_sTmp,"%s%s&apikey=%s&json={pm1:%d,pm25:%d,pm10:%d,pm1cf1:%d,pm25cf1:%d,pm10cf1:%d,ppd03:%d,ppd05:%d,ppd1:%d,ppd25:%d,ppd50:%d,ppd10:%d",baseuri,node,EMONCMS_WRITE_KEY,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0],data[Pmsx003::PM1dot0CF1],data[Pmsx003::PM2dot5CF1],data[Pmsx003::PM10dot0CF1],data[Pmsx003::Particles0dot3],data[Pmsx003::Particles0dot5],data[Pmsx003::Particles1dot0],data[Pmsx003::Particles2dot5],data[Pmsx003::Particles5dot0],data[Pmsx003::Particles10]);
+	    if (arc == true) {
+	      sprintf(g_sTmp+strlen(g_sTmp),",temp:%0.0f,rh:%0.0f",temperature,humidity);
 	    }
 	    strcat(g_sTmp,"}");
 #endif // EMONCMS

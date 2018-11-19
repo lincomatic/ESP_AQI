@@ -286,12 +286,12 @@ const char *Pmsx003::metrics[]{
 };
 
 const char *Pmsx003::dataNames[]{
-	"PM1.0, CF=1",
-	"PM2.5, CF=1",
-	"PM10.  CF=1",
-	"PM1.0",
-	"PM2.5",
-	"PM10.",
+	"PM1.0 CF=1",
+	"PM2.5 CF=1",
+	"PM10. CF=1",
+	"PM1.0 ATM",
+	"PM2.5 ATM",
+	"PM10. ATM",
 
 	"Particles > 0.3 micron",
 	"Particles > 0.5 micron",
