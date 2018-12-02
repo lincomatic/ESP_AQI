@@ -85,7 +85,7 @@ void factoryReset()
 {
   Serial.println("Factory Reset");
 #ifdef WIFI_MGR
-  wfCfg.resetCfg(1);
+  g_wfCfg.resetCfg(1);
 #endif // WIFI_MGR
   reboot();
 }
@@ -114,6 +114,8 @@ void backgroundTasks()
 #ifdef OTA_UPDATE
   AOTAMgr.handle();
 #endif
+
+  g_wfCfg.handleWebServer();
 
   yield();
 }
@@ -146,15 +148,15 @@ void setup(void)
   btnReset.init();
   
 #ifdef WIFI_MGR
-  EEPROM.begin(wfCfg.getConfigSize());  
+  EEPROM.begin(g_wfCfg.getConfigSize());  
 
   // display the MAC on Serial
-  wfCfg.printMac();
+  g_wfCfg.printMac();
   
-  wfCfg.readCfg();
+  g_wfCfg.readCfg();
   Serial.println("readCfg() done.");
   
-  wfCfg.StartManager();
+  g_wfCfg.StartManager();
   Serial.println("StartManager() done.");
   EEPROM.end();
 #endif // WIFI_MGR

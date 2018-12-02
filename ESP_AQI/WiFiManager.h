@@ -287,6 +287,9 @@ class WiFiManager
     
     std::unique_ptr<WM_WebServer> server;
 
+    void setupWebServer();
+    void handleWebServer() { server->handleClient(); }
+
   private:
     std::vector<uint8_t> _menuIds;
     std::vector<const char *> _menuIdsDefault = {"wifi","info","exit"};
@@ -503,6 +506,7 @@ class WiFiManager
       // DEBUG_WM("NO fromString METHOD ON IPAddress, you need ESP8266 core 2.1.0 or newer for Custom IP configuration to work.");
       return false;
     }
+
 };
 
 #endif

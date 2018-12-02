@@ -314,6 +314,8 @@ boolean WiFiManager::autoConnect(char const *apName, char const *apPassword) {
         DEBUG_WM(DEBUG_DEV,"hostname: STA",WiFi.getHostname());
       #endif
     }
+
+    setupWebServer();
     return true;
   }
 
@@ -448,26 +450,9 @@ boolean WiFiManager::configPortalHasTimeout(){
     return false;
 }
 
-void WiFiManager::setupConfigPortal() {
-
-  DEBUG_WM(F("Starting Web Portal"));
-
-  // setup dns and web servers
-  dnsServer.reset(new DNSServer());
+void WiFiManager::setupWebServer()
+{
   server.reset(new WM_WebServer(80));
-
-  /* Setup the DNS server redirecting all the domains to the apIP */
-  dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
-  // DEBUG_WM("dns server started port: ",DNS_PORT);
-  DEBUG_WM(DEBUG_DEV,"dns server started with ip: ",WiFi.softAPIP());
-  dnsServer->start(DNS_PORT, F("*"), WiFi.softAPIP());
-
-  // @todo new callback, webserver started, callback cannot override handlers, but can grab them first
-
-  if ( _webservercallback != NULL) {
-    _webservercallback();
-  }
-
   /* Setup httpd callbacks, web pages: root, wifi config pages, SO captive portal detectors and not found. */
   server->on(String(FPSTR(R_root)).c_str(),       std::bind(&WiFiManager::handleRoot, this));
   server->on(String(FPSTR(R_wifi)).c_str(),       std::bind(&WiFiManager::handleWifi, this, true));
@@ -485,6 +470,29 @@ void WiFiManager::setupConfigPortal() {
   
   server->begin(); // Web server start
   DEBUG_WM(DEBUG_VERBOSE,F("HTTP server started"));
+}
+
+void WiFiManager::setupConfigPortal() {
+
+  DEBUG_WM(F("Starting Web Portal"));
+
+  // setup dns and web servers
+  dnsServer.reset(new DNSServer());
+
+  /* Setup the DNS server redirecting all the domains to the apIP */
+  dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
+  // DEBUG_WM("dns server started port: ",DNS_PORT);
+  DEBUG_WM(DEBUG_DEV,"dns server started with ip: ",WiFi.softAPIP());
+  dnsServer->start(DNS_PORT, F("*"), WiFi.softAPIP());
+
+  // @todo new callback, webserver started, callback cannot override handlers, but can grab them first
+
+  if ( _webservercallback != NULL) {
+    _webservercallback();
+  }
+
+  setupWebServer();
+
 
   if(_preloadwifiscan) WiFi_scanNetworks(true,true); // preload wifiscan , async
 }
@@ -662,10 +670,8 @@ bool WiFiManager::shutdownConfigPortal(){
   server->handleClient();
 
   // @todo what is the proper way to shutdown and free the server up
-  server->stop();
-  server.reset();
-  dnsServer->stop(); //  free heap ?
-  dnsServer.reset();
+  //  server->stop();
+  //  server.reset();
 
   WiFi.scanDelete(); // free wifi scan results
 

@@ -7,7 +7,9 @@ typedef struct config_parms {
   char staticNM[16]; // optional static netmask
 } CONFIG_PARMS;
 
+#ifdef API_WRITE_KEY_LEN
 extern char g_ApiWriteKey[API_WRITEKEY_LEN+1];
+#endif
 
 //flag for saving data
 
@@ -21,10 +23,12 @@ class WifiConfigurator {
   void resetConfigParms() { memset(&configParms,0,sizeof(configParms)); }
 public:
   static bool shouldSaveConfig;
+  WiFiManager wifiManager;
 
   WifiConfigurator();
 
   void StartManager(void);
+  void handleWebServer() { wifiManager.handleWebServer(); }
   String getUniqueSystemName();
   void printMac();
   void readCfg();
@@ -100,8 +104,6 @@ void WifiConfigurator::StartManager(void)
   WiFiManagerParameter custom_nm("nm", "Static Netmask (Blank for DHCP)", configParms.staticNM, sizeof(configParms.staticNM));
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
-  WiFiManager wifiManager;
-
   // this is what is called if the webinterface want to save data, callback is right above this function and just sets a flag.
   wifiManager.setSaveConfigCallback(saveConfigCallback);
 
@@ -141,7 +143,6 @@ void WifiConfigurator::StartManager(void)
 
   //fetches ssid and pass and tries to connect
   //if it does not connect it starts an access point with the specified name
-  //here  "AutoConnectAP"
   //and goes into a blocking loop awaiting configuration
   if (!wifiManager.autoConnect(getUniqueSystemName().c_str())) {
     Serial.println("timed out and failed to connect");
@@ -164,6 +165,7 @@ void WifiConfigurator::StartManager(void)
   // the flag is created in the callback above..
   if (shouldSaveConfig) {
     // connection worked so lets save all those parameters to the config file
+#ifdef API_WRITE_KEY_LEN
     strcpy(configParms.apiwritekey, custom_apiwritekey.getValue());
     if (*configParms.apiwritekey) {
       strcpy(g_ApiWriteKey,configParms.apiwritekey);
@@ -171,6 +173,7 @@ void WifiConfigurator::StartManager(void)
     else {
       g_ApiWriteKey[0] = 0;
     }
+#endif // API_WRITE_KEY_LEN
     strcpy(configParms.staticIP, custom_ip.getValue());
     strcpy(configParms.staticGW, custom_gw.getValue());
     strcpy(configParms.staticNM, custom_nm.getValue());
@@ -259,8 +262,10 @@ void WifiConfigurator::readCfg()
       configParms.apiwritekey[i] = EEPROM.read(eepidx++);
     }
     configParms.apiwritekey[i] = 0;
+#ifdef API_WRITE_KEY_LEN
     strcpy(g_ApiWriteKey,configParms.apiwritekey);
     Serial.print("apiwritekey: ");Serial.println(g_ApiWriteKey);
+#endif // API_WRITE_KEY_LEN
 
     len = EEPROM.read(eepidx++);
     if ((len > 0) && (len < sizeof(configParms.staticIP))) {
@@ -317,5 +322,5 @@ void WifiConfigurator::readCfg()
   }
 }
 
-WifiConfigurator wfCfg;
+WifiConfigurator g_wfCfg;
 
