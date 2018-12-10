@@ -425,12 +425,12 @@ void loop(void)
 #endif // EMONCMS
     if (*g_sTmp) {
       Serial.println(g_sTmp);
-      for (int i=0;i < 5;i++) {
+      for (int i=0;i < 2;i++) {
 	backgroundTasks();
 	HTTPClient http;
 	http.setUserAgent("ESP_AQI/1.0");
 	http.begin(g_sTmp);
-	//	http.begin("http://www.google.com/gg");//g_sTmp);
+	//	http.begin("http://www.google.com/gg");
 	int hrc = http.GET(); // send request
 	Serial.print("return code: ");Serial.println(hrc);
 	String hresp = http.getString(); // get payload
