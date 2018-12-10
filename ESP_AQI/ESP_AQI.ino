@@ -338,7 +338,7 @@ void loop(void)
   if (arc == true) {
     g_auxData.temperature =  am2320.getTemperature();
 #ifdef TEMPERATURE_FAHRENHEIT
-    g_auxData.temperature *= (9.0/5.0) + 32.0;
+    g_auxData.temperature = (g_auxData.temperature * (9.0F/5.0F)) + 32.0F;
 #endif // TEMPERATURE_FAHRENHEIT
     g_auxData.humidity = am2320.getHumidity();
     sprintf(g_sTmp,"temp=%0.0f humidity=%0.0f",g_auxData.temperature,g_auxData.humidity);
