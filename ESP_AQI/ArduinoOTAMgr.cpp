@@ -17,6 +17,8 @@ void ArduinoOTAMgr::boot(const char *hostname,const char *pw)
   });
   ArduinoOTA.onEnd([]() {
     Serial.println("OTA end");
+    extern void reboot();
+    reboot();
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
