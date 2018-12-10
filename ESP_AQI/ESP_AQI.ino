@@ -89,8 +89,12 @@ typedef struct auxdata {
 
 
 #ifdef API_WRITEKEY_LEN
-char g_ApiWriteKey[API_WRITEKEY_LEN+1] = { 0 };
-#endif
+#ifdef THINGSPEAK
+const char *g_ApiWriteKey = THINGSPEAK_WRITE_KEY;
+#elif defined(EMONCMS)
+const char *g_ApiWriteKey = EMONCMS_WRITE_KEY;
+#endif // THINGSPEK
+#endif // API_WRITEKEY_LEN
 
 
 void reboot()
@@ -244,12 +248,6 @@ void setup(void)
 
 #endif // USE_BME280
 
-#ifdef THINGSPEAK_WRITE_KEY
-  strcpy(g_ApiWriteKey,THINGSPEAK_WRITE_KEY);
-#elif defined(EMONCMS_WRITE_KEY)
-  strcpy(g_ApiWriteKey,EMONCMS_WRITE_KEY);
-#endif
-
   Serial.println("setup done");
 }
 
@@ -295,6 +293,7 @@ int readPms(Pmsx003 *pms,Pmsx003::pmsData *data)
       }
       break;
     default:
+      backgroundTasks();
       ++retry;
       Serial.println(Pmsx003::errorMsg[status]);
       /*if (status == Pmsx003::noData)*/ mydelay(500);
@@ -308,21 +307,30 @@ int readPms(Pmsx003 *pms,Pmsx003::pmsData *data)
 void loop(void)
 {
   backgroundTasks();
+  unsigned long startms = millis();
+  Serial.println("WAKEUP");
 
 #ifdef PIN_LED
   digitalWrite(PIN_LED,LOW); // onboard LED on
 #endif // PIN_LED
-  unsigned long startms = millis();
 
 #ifdef PMS_SLEEP_WAKEUP_WAIT
   pmsx003wake();
-  Serial.println("WAKEUP");
+  // wait for PMS to stabilize
   mydelay(PMS_SLEEP_WAKEUP_WAIT);
 #endif // PMS_SLEEP_WAKEUP_WAIT
 
   Serial.println("READ");
+  backgroundTasks();
   int rc1 = readPms(&pms1,data);
+  backgroundTasks();
   int rc2 = readPms(&pms2,data2);
+  backgroundTasks();
+
+#ifdef PMS_SLEEP_WAKEUP_WAIT
+  pmsx003sleep();
+#endif // PMS_SLEEP_WAKEUP_WAIT
+
 
 #ifdef USE_AM2320	  
   Serial.print("---\nam2320: ");
@@ -372,16 +380,17 @@ void loop(void)
       
 #ifdef THINGSPEAK
     sprintf(g_sTmp,"http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%d&field3=%d",g_ApiWriteKey,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
-    if (1) { //(arc == true) {
+    if (arc == true) {
       sprintf(g_sTmp+strlen(g_sTmp),"&field4=%0.0f&field5=%0.0f",g_auxData.temperature,g_auxData.humidity);
     }
 #elif defined(EMONCMS)
     const char *baseuri = EMONCMS_BASE_URI;
     const char *node = EMONCMS_NODE;
-    sprintf(g_sTmp,"%s%s&apikey=%s&json={",baseuri,node,EMONCMS_WRITE_KEY);
+    sprintf(g_sTmp,"%s%s&json={",baseuri,node);
     if (!rc1) {
       sprintf(g_sTmp+strlen(g_sTmp),"pm1:%d,pm25:%d,pm10:%d,pm1cf1:%d,pm25cf1:%d,pm10cf1:%d,ppd03:%d,ppd05:%d,ppd1:%d,ppd25:%d,ppd50:%d,ppd10:%d",data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0],data[Pmsx003::PM1dot0CF1],data[Pmsx003::PM2dot5CF1],data[Pmsx003::PM10dot0CF1],data[Pmsx003::Particles0dot3],data[Pmsx003::Particles0dot5],data[Pmsx003::Particles1dot0],data[Pmsx003::Particles2dot5],data[Pmsx003::Particles5dot0],data[Pmsx003::Particles10]);
     }
+
     if (!rc2) {
       if (!rc1) strcat(g_sTmp,",");
       sprintf(g_sTmp+strlen(g_sTmp),"pm1_2:%d,pm25_2:%d,pm10_2:%d,pm1cf1_2:%d,pm25cf1_1:%d,pm10cf1_2:%d,ppd03_2:%d,ppd05_2:%d,ppd1_2:%d,ppd25_2:%d,ppd50_2:%d,ppd10_2:%d",data2[Pmsx003::PM1dot0],data2[Pmsx003::PM2dot5],data2[Pmsx003::PM10dot0],data2[Pmsx003::PM1dot0CF1],data2[Pmsx003::PM2dot5CF1],data2[Pmsx003::PM10dot0CF1],data2[Pmsx003::Particles0dot3],data2[Pmsx003::Particles0dot5],data2[Pmsx003::Particles1dot0],data2[Pmsx003::Particles2dot5],data2[Pmsx003::Particles5dot0],data2[Pmsx003::Particles10]);
@@ -406,30 +415,37 @@ void loop(void)
     }
 #endif //USE_BME280
 
-    if (!rc1 || !rc2 || arc) strcat(g_sTmp,",");
-    sprintf(g_sTmp+strlen(g_sTmp),"rssi:%d}",WiFi.RSSI());
+#if defined(USE_BME280) || defined(USE_AM2320)
+	if (!rc1 || !rc2 || arc) strcat(g_sTmp, ",");
+#else
+	if (!rc1 || !rc2) strcat(g_sTmp, ",");
+#endif
+	sprintf(g_sTmp+strlen(g_sTmp),"rssi:%d}&apikey=%s",WiFi.RSSI(),EMONCMS_WRITE_KEY);
 
 #endif // EMONCMS
     if (*g_sTmp) {
       Serial.println(g_sTmp);
-      HTTPClient http;
-      http.setUserAgent("ESP_AQI/1.0");
-      http.begin(g_sTmp);
-      int hrc = http.GET(); // send request
-      String hresp = http.getString(); // get payload
-      Serial.print("return code: ");Serial.println(hrc);
-      Serial.print("response data: ");Serial.println(hresp);
-      http.end();
+      for (int i=0;i < 5;i++) {
+	backgroundTasks();
+	HTTPClient http;
+	http.setUserAgent("ESP_AQI/1.0");
+	http.begin(g_sTmp);
+	//	http.begin("http://www.google.com/gg");//g_sTmp);
+	int hrc = http.GET(); // send request
+	Serial.print("return code: ");Serial.println(hrc);
+	String hresp = http.getString(); // get payload
+	Serial.print("response data: ");Serial.println(hresp);
+	http.end();
+	mydelay(250);
+	if (hrc > 0) break;
+	if (i==4) while (1) backgroundTasks();
+      }
     }
   }
   else {
     Serial.println("API write key not set");
   }
 #endif // API_WRITEKEY_LEN
-
-#ifdef PMS_SLEEP_WAKEUP_WAIT
-  pmsx003sleep();
-#endif // PMS_SLEEP_WAKEUP_WAIT
 
 #ifdef PIN_LED
   digitalWrite(PIN_LED,HIGH); // onboard LED off
@@ -441,6 +457,6 @@ void loop(void)
   Serial.print("last update interval: ");Serial.println(curms - lastUpdateMs);
   lastUpdateMs = curms;
   updateWaitMs = UPDATE_INTERVAL_MS - waitms;
-  Serial.print("updateWaitMs: ");Serial.println(updateWaitMs);
+  Serial.print("waiting updateWaitMs: ");Serial.println(updateWaitMs);
   mydelay(updateWaitMs);
 }
