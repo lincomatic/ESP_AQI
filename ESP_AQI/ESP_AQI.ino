@@ -241,6 +241,7 @@ void setup(void)
   }
   else {
     bme280Present = true;
+	Serial.println("BME280 connected");
 #ifdef BME280_LOW_POWER
     bme280.setMode(MODE_SLEEP); //Sleep for now
 #endif
@@ -371,6 +372,8 @@ void loop(void)
 #endif //TEMPERATURE_FAHRENHEIT
     g_auxData.humidity = bme280.readFloatHumidity();
     g_auxData.airPressure = bme280.readFloatPressure();
+	sprintf(g_sTmp, "BME280: temp %f F, rh: %f %%, pressure: %f", g_auxData.temperature, g_auxData.humidity, g_auxData.airPressure);
+	Serial.println(g_sTmp);
   }
 #endif // USE_BME280
     
