@@ -21,8 +21,8 @@
 //#define PIN_RX 5// LoLin/WeMos D1/GPIO5
 //#define PIN_TX 4 // LoLin/WeMos D2/GPIO4
 //#define PIN_RX  14 // LoLin/WeMos D5/GPIO14
-#define PIN_RX1 13 // D7GPIO13 PMS5003
-#define PIN_RX2 12 // D5/GPIO12 PMS7003
+#define PIN_RX1 12 // D6/GPIO12 PMS7003
+#define PIN_RX2 13 // D7GPIO13 PMS5003
 #define PIN_TX  15 // LoLin/WeMos D8/GPIO1pin_fac5 - dummy-not hooked up
 //#define PIN_TX  12 // LoLin/WeMos D6/GPIO12
 //#define PIN_SET 13  // LoLin/WeMos D7/GPIO13
