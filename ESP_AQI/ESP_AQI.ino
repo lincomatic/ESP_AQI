@@ -14,6 +14,8 @@
 #define USE_BME280
 #define BME280_LOW_POWER // put BME280 to sleep between readings
 #define BME280_I2C_ADDR 0x76
+#define BME280_TEMP_CORRECTION (0.0) // moved to EMONCMS(-2.6)
+#define BME280_RH_CORRECTION (0.0) // moved to EMONCMS(8.0)
 
 #define WIFI_MGR // use AP mode to configure via captive portal
 #define OTA_UPDATE // OTA firmware update
@@ -155,6 +157,7 @@ void pmsx003sleep()
 #endif
 }
 
+
 void pmsx003wake()
 {
 #ifdef PIN_SET
@@ -182,6 +185,7 @@ void backgroundTasks()
   yield();
 }
 
+
 void mydelay(unsigned long ms)
 {
   unsigned long startms = millis();
@@ -189,6 +193,59 @@ void mydelay(unsigned long ms)
     backgroundTasks();
   }
 }
+
+
+void ReadAux()
+{
+#ifdef USE_AM2320	  
+  Serial.print("---\nam2320: ");
+  bool arc = am2320.measure();
+  if (arc == true) {
+    g_auxData.atemp = am2320.getTemperature();
+#ifdef TEMPERATURE_FAHRENHEIT
+    g_auxData.atemp = (g_auxData.atemp * (9.0F / 5.0F)) + 32.0F;
+#endif // TEMPERATURE_FAHRENHEIT
+    g_auxData.arh = am2320.getHumidity();
+    sprintf(g_sTmp, "temp=%0.1f humidity=%0.1f", g_auxData.atemp, g_auxData.arh);
+  }
+  else { // error
+    //	    temperature = -99;
+    //	    humidity = -1;
+    sprintf(g_sTmp, "error %d", am2320.getErrorCode());
+  }
+  Serial.println(g_sTmp);
+  backgroundTasks();
+#endif // USE_AM2320
+  
+#ifdef USE_BME280
+  if (bme280Present) {
+#ifdef BME280_LOW_POWER
+    bme280.setMode(MODE_FORCED); //Wake up sensor and take reading
+    //  long startTime = millis();
+    while (bme280.isMeasuring() == false); //Wait for sensor to start measurment
+    while (bme280.isMeasuring() == true) delay(1); //Hang out while sensor completes the reading    
+    //  long endTime = millis();
+    //  Serial.print(" Measure time(ms): ");
+    //  Serial.print(endTime - startTime);
+#endif //BME280_LOW_POWER
+    
+    // N.B. *MUST* read temperature before pressure to load t_fine variable
+#ifdef TEMPERATURE_FAHRENHEIT
+    g_auxData.btemp = bme280.readTempF();
+#else
+    g_auxData.btemp = bme280.readTempC();
+#endif //TEMPERATURE_FAHRENHEIT
+    g_auxData.btemp += BME280_TEMP_CORRECTION;
+    g_auxData.brh = bme280.readFloatHumidity() + BME280_RH_CORRECTION;
+    g_auxData.airPressure = bme280.readFloatPressure();
+    sprintf(g_sTmp, "BME280: temp %f F, rh: %f %%, pressure: %f", g_auxData.btemp, g_auxData.brh, g_auxData.airPressure);
+    Serial.println(g_sTmp);
+  }
+  backgroundTasks();
+#endif // USE_BME280
+  mydelay(1000);
+}
+
 
 void setup(void)
 {
@@ -267,6 +324,10 @@ void setup(void)
 
 #endif // USE_BME280
 
+#ifdef testaux
+  while (1) ReadAux();
+#endif 
+
   Serial.println("setup done");
 }
 
@@ -337,52 +398,7 @@ void loop(void)
   pmsx003sleep();
 #endif // PMS_SLEEP_WAKEUP_WAIT
 
-
-#ifdef USE_AM2320	  
-  Serial.print("---\nam2320: ");
-  bool arc = am2320.measure();
-  if (arc == true) {
-    g_auxData.atemp =  am2320.getTemperature();
-#ifdef TEMPERATURE_FAHRENHEIT
-    g_auxData.atemp = (g_auxData.atemp * (9.0F/5.0F)) + 32.0F;
-#endif // TEMPERATURE_FAHRENHEIT
-    g_auxData.arh = am2320.getHumidity();
-    sprintf(g_sTmp,"temp=%0.0f humidity=%0.0f",g_auxData.atemp,g_auxData.arh);
-  }
-  else { // error
-    //	    temperature = -99;
-    //	    humidity = -1;
-    sprintf(g_sTmp,"error %d",am2320.getErrorCode());
-  }
-  Serial.println(g_sTmp);
-  backgroundTasks();
-#endif // USE_AM2320
-
-#ifdef USE_BME280
-  if (bme280Present) {
-#ifdef BME280_LOW_POWER
-  bme280.setMode(MODE_FORCED); //Wake up sensor and take reading
-  //  long startTime = millis();
-  while(bme280.isMeasuring() == false) ; //Wait for sensor to start measurment
-  while(bme280.isMeasuring() == true) delay(1) ; //Hang out while sensor completes the reading    
-  //  long endTime = millis();
-  //  Serial.print(" Measure time(ms): ");
-  //  Serial.print(endTime - startTime);
-#endif //BME280_LOW_POWER
-
-    // N.B. *MUST* read temperature before pressure to load t_fine variable
-#ifdef TEMPERATURE_FAHRENHEIT
-    g_auxData.btemp = bme280.readTempF();
-#else
-    g_auxData.btemp = bme280.readTempC();
-#endif //TEMPERATURE_FAHRENHEIT
-    g_auxData.brh = bme280.readFloatHumidity();
-    g_auxData.airPressure = bme280.readFloatPressure();
-	sprintf(g_sTmp, "BME280: temp %f F, rh: %f %%, pressure: %f", g_auxData.btemp, g_auxData.brh, g_auxData.airPressure);
-	Serial.println(g_sTmp);
-  }
-  backgroundTasks();
-#endif // USE_BME280
+  ReadAux();
     
 #ifdef API_WRITEKEY_LEN
   if (*g_ApiWriteKey) {
@@ -390,8 +406,8 @@ void loop(void)
       
 #ifdef THINGSPEAK
     sprintf(g_sTmp,"http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%d&field3=%d",g_ApiWriteKey,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
-    if (arc == true) {
-      sprintf(g_sTmp+strlen(g_sTmp),"&field4=%0.0f&field5=%0.0f",g_auxData.atemp,g_auxData.arh);
+    if (g_auxData.arh >= 0) {
+      sprintf(g_sTmp+strlen(g_sTmp),"&field4=%0.1f&field5=%0.1f",g_auxData.atemp,g_auxData.arh);
     }
 #elif defined(EMONCMS)
     const char *baseuri = EMONCMS_BASE_URI;
@@ -408,16 +424,16 @@ void loop(void)
     }
 
 #ifdef USE_AM2320
-    if (arc == true) {
+    if (g_auxData.arh >= 0) {
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
-      sprintf(g_sTmp+strlen(g_sTmp),"tempa:%0.0f,rha:%0.0f",g_auxData.atemp,g_auxData.arh);
+      sprintf(g_sTmp+strlen(g_sTmp),"tempa:%0.1f,rha:%0.1f",g_auxData.atemp,g_auxData.arh);
     }
 #endif // USE_AM2320
 
 #ifdef USE_BME280
     if (bme280Present) {
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
-      sprintf(g_sTmp+strlen(g_sTmp),"temp:%0.0f,rh:%0.0f,airprs:%0.0f",g_auxData.btemp,g_auxData.brh,g_auxData.airPressure);
+      sprintf(g_sTmp+strlen(g_sTmp),"temp:%0.1f,rh:%0.1f,airprs:%0.0f",g_auxData.btemp,g_auxData.brh,g_auxData.airPressure);
     }
 #endif //USE_BME280
 
