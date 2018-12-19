@@ -10,7 +10,7 @@
 //
 // aux sensor selection
 //
-//#define USE_AM2320
+#define USE_AM2320
 #define USE_BME280
 #define BME280_LOW_POWER // put BME280 to sleep between readings
 #define BME280_I2C_ADDR 0x76
@@ -80,14 +80,32 @@ bool bme280Present;
 #endif // USE_BME280
 
 typedef struct auxdata {
-  float temperature;
-  float humidity;
+#ifdef USE_AM2320
+  float atemp;
+  float arh;
+#endif // USE_AM2320
 #ifdef USE_BME280
+  float btemp;
+  float brh;
   float airPressure;
 #endif // USE_BME280
 } AUX_DATA;
 
 
+//
+// global variables
+//
+AUX_DATA g_auxData;
+unsigned long lastUpdateMs = 0UL;
+unsigned long updateWaitMs = 0UL;
+char g_sTmp[512];
+
+
+const auto n = Pmsx003::Reserved;
+Pmsx003::pmsData data[n];
+#ifdef PIN_RX2
+Pmsx003::pmsData data2[n];
+#endif // PIN_RX2
 #ifdef API_WRITEKEY_LEN
 #ifdef THINGSPEAK
 const char *g_ApiWriteKey = THINGSPEAK_WRITE_KEY;
@@ -254,20 +272,7 @@ void setup(void)
 
 ////////////////////////////////////////
 
-//
-// global variables
-//
-AUX_DATA g_auxData;
-unsigned long lastUpdateMs = 0UL;
-unsigned long updateWaitMs = 0UL;
-char g_sTmp[512];
 
-
-const auto n = Pmsx003::Reserved;
-Pmsx003::pmsData data[n];
-#ifdef PIN_RX2
-Pmsx003::pmsData data2[n];
-#endif // PIN_RX2
 
 int readPms(Pmsx003 *pms,Pmsx003::pmsData *data)
 {
@@ -337,12 +342,12 @@ void loop(void)
   Serial.print("---\nam2320: ");
   bool arc = am2320.measure();
   if (arc == true) {
-    g_auxData.temperature =  am2320.getTemperature();
+    g_auxData.atemp =  am2320.getTemperature();
 #ifdef TEMPERATURE_FAHRENHEIT
-    g_auxData.temperature = (g_auxData.temperature * (9.0F/5.0F)) + 32.0F;
+    g_auxData.atemp = (g_auxData.atemp * (9.0F/5.0F)) + 32.0F;
 #endif // TEMPERATURE_FAHRENHEIT
-    g_auxData.humidity = am2320.getHumidity();
-    sprintf(g_sTmp,"temp=%0.0f humidity=%0.0f",g_auxData.temperature,g_auxData.humidity);
+    g_auxData.arh = am2320.getHumidity();
+    sprintf(g_sTmp,"temp=%0.0f humidity=%0.0f",g_auxData.atemp,g_auxData.arh);
   }
   else { // error
     //	    temperature = -99;
@@ -350,6 +355,7 @@ void loop(void)
     sprintf(g_sTmp,"error %d",am2320.getErrorCode());
   }
   Serial.println(g_sTmp);
+  backgroundTasks();
 #endif // USE_AM2320
 
 #ifdef USE_BME280
@@ -358,7 +364,7 @@ void loop(void)
   bme280.setMode(MODE_FORCED); //Wake up sensor and take reading
   //  long startTime = millis();
   while(bme280.isMeasuring() == false) ; //Wait for sensor to start measurment
-  while(bme280.isMeasuring() == true) ; //Hang out while sensor completes the reading    
+  while(bme280.isMeasuring() == true) delay(1) ; //Hang out while sensor completes the reading    
   //  long endTime = millis();
   //  Serial.print(" Measure time(ms): ");
   //  Serial.print(endTime - startTime);
@@ -366,15 +372,16 @@ void loop(void)
 
     // N.B. *MUST* read temperature before pressure to load t_fine variable
 #ifdef TEMPERATURE_FAHRENHEIT
-    g_auxData.temperature = bme280.readTempF();
+    g_auxData.btemp = bme280.readTempF();
 #else
-    g_auxData.temperature = bme280.readTempC();
+    g_auxData.btemp = bme280.readTempC();
 #endif //TEMPERATURE_FAHRENHEIT
-    g_auxData.humidity = bme280.readFloatHumidity();
+    g_auxData.brh = bme280.readFloatHumidity();
     g_auxData.airPressure = bme280.readFloatPressure();
-	sprintf(g_sTmp, "BME280: temp %f F, rh: %f %%, pressure: %f", g_auxData.temperature, g_auxData.humidity, g_auxData.airPressure);
+	sprintf(g_sTmp, "BME280: temp %f F, rh: %f %%, pressure: %f", g_auxData.btemp, g_auxData.brh, g_auxData.airPressure);
 	Serial.println(g_sTmp);
   }
+  backgroundTasks();
 #endif // USE_BME280
     
 #ifdef API_WRITEKEY_LEN
@@ -384,45 +391,37 @@ void loop(void)
 #ifdef THINGSPEAK
     sprintf(g_sTmp,"http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%d&field3=%d",g_ApiWriteKey,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
     if (arc == true) {
-      sprintf(g_sTmp+strlen(g_sTmp),"&field4=%0.0f&field5=%0.0f",g_auxData.temperature,g_auxData.humidity);
+      sprintf(g_sTmp+strlen(g_sTmp),"&field4=%0.0f&field5=%0.0f",g_auxData.atemp,g_auxData.arh);
     }
 #elif defined(EMONCMS)
     const char *baseuri = EMONCMS_BASE_URI;
     const char *node = EMONCMS_NODE;
     sprintf(g_sTmp,"%s%s&json={",baseuri,node);
+    int baselen = strlen(g_sTmp);
     if (!rc1) {
       sprintf(g_sTmp+strlen(g_sTmp),"pm1:%d,pm25:%d,pm10:%d,pm1cf1:%d,pm25cf1:%d,pm10cf1:%d,ppd03:%d,ppd05:%d,ppd1:%d,ppd25:%d,ppd50:%d,ppd10:%d",data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0],data[Pmsx003::PM1dot0CF1],data[Pmsx003::PM2dot5CF1],data[Pmsx003::PM10dot0CF1],data[Pmsx003::Particles0dot3],data[Pmsx003::Particles0dot5],data[Pmsx003::Particles1dot0],data[Pmsx003::Particles2dot5],data[Pmsx003::Particles5dot0],data[Pmsx003::Particles10]);
     }
 
     if (!rc2) {
-      if (!rc1) strcat(g_sTmp,",");
+      if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
       sprintf(g_sTmp+strlen(g_sTmp),"pm1_2:%d,pm25_2:%d,pm10_2:%d,pm1cf1_2:%d,pm25cf1_2:%d,pm10cf1_2:%d,ppd03_2:%d,ppd05_2:%d,ppd1_2:%d,ppd25_2:%d,ppd50_2:%d,ppd10_2:%d",data2[Pmsx003::PM1dot0],data2[Pmsx003::PM2dot5],data2[Pmsx003::PM10dot0],data2[Pmsx003::PM1dot0CF1],data2[Pmsx003::PM2dot5CF1],data2[Pmsx003::PM10dot0CF1],data2[Pmsx003::Particles0dot3],data2[Pmsx003::Particles0dot5],data2[Pmsx003::Particles1dot0],data2[Pmsx003::Particles2dot5],data2[Pmsx003::Particles5dot0],data2[Pmsx003::Particles10]);
     }
 
 #ifdef USE_AM2320
     if (arc == true) {
-      if (!rc1 || !rc2) strcat(g_sTmp,",");
-      sprintf(g_sTmp+strlen(g_sTmp),"temp:%0.0f,rh:%0.0f",g_auxData.temperature,g_auxData.humidity);
+      if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
+      sprintf(g_sTmp+strlen(g_sTmp),"tempa:%0.0f,rha:%0.0f",g_auxData.atemp,g_auxData.arh);
     }
 #endif // USE_AM2320
 
 #ifdef USE_BME280
-    bool arc;
     if (bme280Present) {
-      arc = true;
-      if (!rc1 || !rc2) strcat(g_sTmp,",");
-      sprintf(g_sTmp+strlen(g_sTmp),"temp:%0.0f,rh:%0.0f,airprs:%0.0f",g_auxData.temperature,g_auxData.humidity,g_auxData.airPressure);
-    }
-    else {
-      arc = false;
+      if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
+      sprintf(g_sTmp+strlen(g_sTmp),"temp:%0.0f,rh:%0.0f,airprs:%0.0f",g_auxData.btemp,g_auxData.brh,g_auxData.airPressure);
     }
 #endif //USE_BME280
 
-#if defined(USE_BME280) || defined(USE_AM2320)
-	if (!rc1 || !rc2 || arc) strcat(g_sTmp, ",");
-#else
-	if (!rc1 || !rc2) strcat(g_sTmp, ",");
-#endif
+      if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
 	sprintf(g_sTmp+strlen(g_sTmp),"rssi:%d}&apikey=%s",WiFi.RSSI(),EMONCMS_WRITE_KEY);
 
 #endif // EMONCMS
