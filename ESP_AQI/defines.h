@@ -43,7 +43,6 @@
 
 #ifdef EMONCMS
 #define EMONCMS_NODE "aqi0"
-#define EMONCMS_WRITE_KEY "emoncms-write-key"
 #define EMONCMS_BASE_URI "http://data.openevse.com/emoncms/input/post?node="
 #define EMONCMS_WRITE_KEY "---emoncms-write-key------------"
 #define API_WRITEKEY_LEN 32
