@@ -5,55 +5,9 @@
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include "./pms.h"
 #include "Wire.h"
-
-//
-// aux sensor selection
-//
-#define USE_AM2320
-#define USE_BME280
-#define USE_MCP9808
-#define BME280_LOW_POWER // put BME280 to sleep between readings
-#define BME280_I2C_ADDR 0x76
-#define BME280_TEMP_CORRECTION (0.0) // moved to EMONCMS(-2.6)
-#define BME280_RH_CORRECTION (0.0) // moved to EMONCMS(8.0)
-
-#define WIFI_MGR // use AP mode to configure via captive portal
-#define OTA_UPDATE // OTA firmware update
-//#define PIN_RX1 12 // D6/GPIO12 PMS7003
-//#define PIN_RX2 13 // D7GPIO13 PMS5003
-#define PIN_TX  15 // LoLin/WeMos D8/GPIO1pin_fac5 - dummy-not hooked up
-//#define PIN_TX  12 // LoLin/WeMos D6/GPIO12
-//#define PIN_SET 13  // LoLin/WeMos D7/GPIO13
-#define PIN_SET 14 // D5/GPIO14
-//#define PIN_LED 2 //0
-//#define PIN_FACTORY_RESET 12 // LoLin D6/GPIO12 ground this pin to wipe out EEPROM & WiFi settings
-
-#define AP_PREFIX "ESPAQI_"
-#define TEMPERATURE_FAHRENHEIT
-//#define THINGSPEAK
-#define EMONCMS
-
-#define UPDATE_INTERVAL_MS (5UL * 60UL * 1000UL)
-// delay after wake up before taking a reading - to give PMS time to stabilize
-#define PMS_SLEEP_WAKEUP_WAIT 32000UL
-
-#ifdef THINGSPEAK
-#define API_WRITEKEY_LEN 16
-#define THINGSPEAK_WRITE_KEY "thingspeak-write-key"
-#endif
-
-#ifdef EMONCMS
-#define EMONCMS_NODE "aqi0"
-#define EMONCMS_WRITE_KEY "emoncms-write-key"
-#define EMONCMS_BASE_URI "http://data.openevse.com/emoncms/input/post.json?node="
-#define API_WRITEKEY_LEN 32
-#endif
-
-// OTA_UPDATE
-#define OTA_HOST "ESPAQI"
-#define OTA_PASS "espaqi"
+#include "./pms.h"
+#include "./defines.h"
 
 #ifdef OTA_UPDATE
 #include "./ArduinoOTAMgr.h"
@@ -66,6 +20,7 @@ Pmsx003 pms1(PIN_RX1, PIN_TX);
 #ifdef PIN_RX2
 Pmsx003 pms2(PIN_RX2, PIN_TX);
 #endif // PIN_RX2
+
 
 //
 // aux sensor
@@ -222,6 +177,7 @@ void ReadAux()
     //	    temperature = -99;
     //	    humidity = -1;
     sprintf(g_sTmp, "error %d", am2320.getErrorCode());
+    g_auxData.atemp = TEMPERATURE_NOT_INSTALLED;
   }
   Serial.println(g_sTmp);
   backgroundTasks();
@@ -251,18 +207,27 @@ void ReadAux()
     sprintf(g_sTmp, "BME280: temp %f F, rh: %f %%, pressure: %f", g_auxData.btemp, g_auxData.brh, g_auxData.airPressure);
     Serial.println(g_sTmp);
   }
+  else {
+    g_auxData.btemp = TEMPERATURE_NOT_INSTALLED;
+  }
   backgroundTasks();
 #endif // USE_BME280
 
 #ifdef USE_MCP9808
   int16_t c10 = mcp9808.readAmbient(); // celcius * 10
+  if (c10 != TEMPERATURE_NOT_INSTALLED) {
 #ifdef TEMPERATURE_FAHRENHEIT
-  g_auxData.mtemp = (((float)c10) * (9.0F / 50.0F)) + 32.0F;
+    g_auxData.mtemp = (((float)c10) * (9.0F / 50.0F)) + 32.0F;
 #else
     g_auxData.mtemp = ((float)c10)/10.0F;
 #endif //TEMPERATURE_FAHRENHEIT
-    sprintf(g_sTmp, "temp=%0.1f", g_auxData.mtemp);
-    Serial.println(g_sTmp);
+    sprintf(g_sTmp, "MCP9808 temp=%0.1f", g_auxData.mtemp);
+  }
+  else {
+    g_auxData.mtemp = TEMPERATURE_NOT_INSTALLED;
+    strcpy(g_sTmp,"error reading MCP9808");
+  }
+  Serial.println(g_sTmp);
 #endif // USE_MCP9808
 
   mydelay(1000);
@@ -427,7 +392,6 @@ void loop(void)
 #ifdef PMS_SLEEP_WAKEUP_WAIT
   pmsx003sleep();
 #endif // PMS_SLEEP_WAKEUP_WAIT
-
   ReadAux();
     
 #ifdef API_WRITEKEY_LEN
@@ -458,22 +422,24 @@ void loop(void)
 #endif // PIN_RX2
 
 #ifdef USE_AM2320
-    if (g_auxData.arh >= 0) {
+    if (g_auxData.atemp != TEMPERATURE_NOT_INSTALLED) {
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
       sprintf(g_sTmp+strlen(g_sTmp),"tempa:%0.1f,rha:%0.1f",g_auxData.atemp,g_auxData.arh);
     }
 #endif // USE_AM2320
 
 #ifdef USE_BME280
-    if (bme280Present) {
+    if (g_auxData.btemp != TEMPERATURE_NOT_INSTALLED) {
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
       sprintf(g_sTmp+strlen(g_sTmp),"temp:%0.1f,rh:%0.1f,airprs:%0.0f",g_auxData.btemp,g_auxData.brh,g_auxData.airPressure);
     }
 #endif //USE_BME280
-
+    
 #ifdef USE_MCP9808
+    if (g_auxData.mtemp != TEMPERATURE_NOT_INSTALLED) {
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
       sprintf(g_sTmp+strlen(g_sTmp),"tempm:%0.1f",g_auxData.mtemp);
+    }
 #endif // USE_MCP9808
 
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");

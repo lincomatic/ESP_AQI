@@ -19,7 +19,10 @@
 
     v1.0 - First release
 */
+#include "./defines.h"
 #include "./MCP9808.h"
+
+#ifdef USE_MCP9808
 
 inline uint8_t wirerecv(void) {
 #if ARDUINO >= 100
@@ -73,3 +76,5 @@ int16_t MCP9808::readAmbient()
     return TEMPERATURE_NOT_INSTALLED;
   }
 }
+
+#endif // USE_MCP9808

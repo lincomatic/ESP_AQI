@@ -15,9 +15,11 @@
     Copyright 2016 Ratthanan Nalintasnai
 **/
 
-#include "./AM2320.h"
-
 #include <Wire.h>
+#include "./AM2320.h"
+#include "./defines.h"
+
+#ifdef USE_AM2320
 
 AM2320::AM2320() {
     // do nothing
@@ -126,3 +128,5 @@ unsigned int crc16(byte *byte, unsigned int numByte) {
 
     return crc;
 }
+
+#endif // USE_AM2320

@@ -20,9 +20,10 @@ Distributed as-is; no warranty is given.
 ******************************************************************************/
 //See SparkFunBME280.h for additional topology notes.
 
+#include "./defines.h"
 #include "./SparkFunBME280.h"
 
-//#ifdef USE_BME280
+#ifdef USE_BME280
 
 //****************************************************************************//
 //
@@ -710,4 +711,4 @@ void BME280::writeRegister(uint8_t offset, uint8_t dataToWrite)
 	}
 }
 
-//#endif // USE_BME280
+#endif // USE_BME280
