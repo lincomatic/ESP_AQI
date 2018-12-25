@@ -21,12 +21,8 @@
 
 #define WIFI_MGR // use AP mode to configure via captive portal
 #define OTA_UPDATE // OTA firmware update
-// ON LOLIN DON'T USE GPIO5/4 -> I2C!!!
-//#define PIN_RX 5// LoLin/WeMos D1/GPIO5
-//#define PIN_TX 4 // LoLin/WeMos D2/GPIO4
-//#define PIN_RX  14 // LoLin/WeMos D5/GPIO14
-#define PIN_RX1 12 // D6/GPIO12 PMS7003
-#define PIN_RX2 13 // D7GPIO13 PMS5003
+//#define PIN_RX1 12 // D6/GPIO12 PMS7003
+//#define PIN_RX2 13 // D7GPIO13 PMS5003
 #define PIN_TX  15 // LoLin/WeMos D8/GPIO1pin_fac5 - dummy-not hooked up
 //#define PIN_TX  12 // LoLin/WeMos D6/GPIO12
 //#define PIN_SET 13  // LoLin/WeMos D7/GPIO13
@@ -39,7 +35,7 @@
 //#define THINGSPEAK
 #define EMONCMS
 
-#define UPDATE_INTERVAL_MS 300000UL
+#define UPDATE_INTERVAL_MS (5UL * 60UL * 1000UL)
 // delay after wake up before taking a reading - to give PMS time to stabilize
 #define PMS_SLEEP_WAKEUP_WAIT 32000UL
 
@@ -64,7 +60,9 @@
 ArduinoOTAMgr AOTAMgr;
 #endif
 
+#ifdef PIN_RX1
 Pmsx003 pms1(PIN_RX1, PIN_TX);
+#endif // PIN_RX1
 #ifdef PIN_RX2
 Pmsx003 pms2(PIN_RX2, PIN_TX);
 #endif // PIN_RX2
@@ -114,7 +112,9 @@ char g_sTmp[512];
 
 
 const auto n = Pmsx003::Reserved;
+#ifdef PIN_RX1
 Pmsx003::pmsData data[n];
+#endif // PIN_RX1
 #ifdef PIN_RX2
 Pmsx003::pmsData data2[n];
 #endif // PIN_RX2
@@ -329,10 +329,6 @@ void setup(void)
 
 #ifdef USE_BME280
   Wire.begin();
-#ifdef BME280_LOW_POWER
-  Wire.setClock(400000); //Increase to fast I2C speed!
-#endif 
-
   bme280.setI2CAddress(BME280_I2C_ADDR);
   if (!bme280.beginI2C()) {
     Serial.println("BME280 connect failed");
@@ -351,6 +347,9 @@ void setup(void)
 #ifdef USE_MCP9808
   mcp9808.begin();
 #endif //USE_MCP9808
+
+  Wire.setClock(400000); //Increase to fast I2C speed!
+
 #ifdef testaux
   while (1) ReadAux();
 #endif 
@@ -416,10 +415,14 @@ void loop(void)
 
   Serial.println("READ");
   backgroundTasks();
+#ifdef PIN_RX1
   int rc1 = readPms(&pms1,data);
   backgroundTasks();
+#endif // PIN_RX1
+#ifdef PIN_RX2
   int rc2 = readPms(&pms2,data2);
   backgroundTasks();
+#endif // PIN_RX2
 
 #ifdef PMS_SLEEP_WAKEUP_WAIT
   pmsx003sleep();
@@ -441,14 +444,18 @@ void loop(void)
     const char *node = EMONCMS_NODE;
     sprintf(g_sTmp,"%s%s&json={",baseuri,node);
     int baselen = strlen(g_sTmp);
+#ifdef PIN_RX1
     if (!rc1) {
       sprintf(g_sTmp+strlen(g_sTmp),"pm1:%d,pm25:%d,pm10:%d,pm1cf1:%d,pm25cf1:%d,pm10cf1:%d,ppd03:%d,ppd05:%d,ppd1:%d,ppd25:%d,ppd50:%d,ppd10:%d",data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0],data[Pmsx003::PM1dot0CF1],data[Pmsx003::PM2dot5CF1],data[Pmsx003::PM10dot0CF1],data[Pmsx003::Particles0dot3],data[Pmsx003::Particles0dot5],data[Pmsx003::Particles1dot0],data[Pmsx003::Particles2dot5],data[Pmsx003::Particles5dot0],data[Pmsx003::Particles10]);
     }
+#endif // PIN_RX1
 
+#ifdef PIN_RX2
     if (!rc2) {
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
       sprintf(g_sTmp+strlen(g_sTmp),"pm1_2:%d,pm25_2:%d,pm10_2:%d,pm1cf1_2:%d,pm25cf1_2:%d,pm10cf1_2:%d,ppd03_2:%d,ppd05_2:%d,ppd1_2:%d,ppd25_2:%d,ppd50_2:%d,ppd10_2:%d",data2[Pmsx003::PM1dot0],data2[Pmsx003::PM2dot5],data2[Pmsx003::PM10dot0],data2[Pmsx003::PM1dot0CF1],data2[Pmsx003::PM2dot5CF1],data2[Pmsx003::PM10dot0CF1],data2[Pmsx003::Particles0dot3],data2[Pmsx003::Particles0dot5],data2[Pmsx003::Particles1dot0],data2[Pmsx003::Particles2dot5],data2[Pmsx003::Particles5dot0],data2[Pmsx003::Particles10]);
     }
+#endif // PIN_RX2
 
 #ifdef USE_AM2320
     if (g_auxData.arh >= 0) {
