@@ -6,12 +6,14 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include "./pms.h"
+#include "Wire.h"
 
 //
 // aux sensor selection
 //
 #define USE_AM2320
 #define USE_BME280
+#define USE_MCP9808
 #define BME280_LOW_POWER // put BME280 to sleep between readings
 #define BME280_I2C_ADDR 0x76
 #define BME280_TEMP_CORRECTION (0.0) // moved to EMONCMS(-2.6)
@@ -81,6 +83,11 @@ BME280 bme280;
 bool bme280Present;
 #endif // USE_BME280
 
+#ifdef USE_MCP9808
+#include "./MCP9808.h"
+MCP9808 mcp9808;
+#endif //USE_MCP9808
+
 typedef struct auxdata {
 #ifdef USE_AM2320
   float atemp;
@@ -91,6 +98,9 @@ typedef struct auxdata {
   float brh;
   float airPressure;
 #endif // USE_BME280
+#ifdef USE_MCP9808
+  float mtemp;
+#endif // USE_MCP9808
 } AUX_DATA;
 
 
@@ -243,15 +253,29 @@ void ReadAux()
   }
   backgroundTasks();
 #endif // USE_BME280
+
+#ifdef USE_MCP9808
+  int16_t c10 = mcp9808.readAmbient(); // celcius * 10
+#ifdef TEMPERATURE_FAHRENHEIT
+  g_auxData.mtemp = (((float)c10) * (9.0F / 50.0F)) + 32.0F;
+#else
+    g_auxData.mtemp = ((float)c10)/10.0F;
+#endif //TEMPERATURE_FAHRENHEIT
+    sprintf(g_sTmp, "temp=%0.1f", g_auxData.mtemp);
+    Serial.println(g_sTmp);
+#endif // USE_MCP9808
+
   mydelay(1000);
 }
 
 
 void setup(void)
 {
+#ifdef PIN_RX1
   pms1.begin();
   pms1.waitForData(Pmsx003::wakeupTime);
   pms1.write(Pmsx003::cmdModeActive);
+#endif // PIN_RX1
 #ifdef PIN_RX2
   pms2.begin();
   pms2.waitForData(Pmsx003::wakeupTime);
@@ -324,6 +348,9 @@ void setup(void)
 
 #endif // USE_BME280
 
+#ifdef USE_MCP9808
+  mcp9808.begin();
+#endif //USE_MCP9808
 #ifdef testaux
   while (1) ReadAux();
 #endif 
@@ -436,6 +463,11 @@ void loop(void)
       sprintf(g_sTmp+strlen(g_sTmp),"temp:%0.1f,rh:%0.1f,airprs:%0.0f",g_auxData.btemp,g_auxData.brh,g_auxData.airPressure);
     }
 #endif //USE_BME280
+
+#ifdef USE_MCP9808
+      if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
+      sprintf(g_sTmp+strlen(g_sTmp),"tempm:%0.1f",g_auxData.mtemp);
+#endif // USE_MCP9808
 
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
 	sprintf(g_sTmp+strlen(g_sTmp),"rssi:%d}&apikey=%s",WiFi.RSSI(),EMONCMS_WRITE_KEY);
