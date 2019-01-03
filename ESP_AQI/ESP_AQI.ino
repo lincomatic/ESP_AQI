@@ -196,10 +196,9 @@ void ReadAux()
     bme280.setMode(MODE_FORCED); //Wake up sensor and take reading
     unsigned long st = millis();
     while ((bme280.isMeasuring() == false) && ((millis()-st) < 250UL)); //Wait for sensor to start measurment
-    while ((bme280.isMeasuring() == true) && ((millis()-st) < 250UL))) delay(1); //Hang out while sensor completes the reading    
-    //  long endTime = millis();
-    //  Serial.print(" Measure time(ms): ");
-    //  Serial.print(endTime - st);
+    while ((bme280.isMeasuring() == true) && ((millis()-st) < 500UL)) delay(1); //Hang out while sensor completes the reading    
+    //      Serial.print(" Measure time(ms): ");
+    //      Serial.println(millis() - st);
 #endif //BME280_LOW_POWER
     
     // N.B. *MUST* read temperature before pressure to load t_fine variable
@@ -434,16 +433,13 @@ void loop(void)
   sprintf(g_sTmp,"PM2.5: %d %d",data[Pmsx003::PM2dot5],data[Pmsx003::PM2dot5CF1]);
   g_oled.println(g_sTmp);
 #ifdef USE_BME280
-  g_auxData.btemp = 45.6;
-  g_auxData.brh = 36.5;
-  g_auxData.airPressure = 99999.59;
   if (g_auxData.btemp != TEMPERATURE_NOT_INSTALLED) {
-    sprintf(g_sTmp,"Temp: %0.1fF",g_auxData.btemp*OLED_BME280_TEMP_CORRECTION);
+    sprintf(g_sTmp,"Temp: %0.1fF",g_auxData.btemp+OLED_BME280_TEMP_CORRECTION);
     g_oled.println(g_sTmp);
-    float rh = g_auxData.brh + OLED_BME280_RH_CORRECTION;
+    float rh = g_auxData.brh+OLED_BME280_RH_CORRECTION;
     if (rh < 0.0F) rh = 0.0F;
     else if (rh > 100.0F) rh = 100.0F;
-    sprintf(g_sTmp,"Rh: %0.0f%%",rh);
+    sprintf(g_sTmp,"RH: %0.0f%%",rh);
     g_oled.println(g_sTmp);
     sprintf(g_sTmp,"AP: %0.2f in",g_auxData.airPressure*0.0002952998751);
     g_oled.println(g_sTmp);
