@@ -2,13 +2,17 @@
 
 #define WIFI_MGR // use AP mode to configure via captive portal
 #define OTA_UPDATE // OTA firmware update
+#define OLED128X64
+#define OLED_I2C_ADDR 0x3C
+#define OLED_BME280_TEMP_CORRECTION (-7.6F)
+#define OLED_BME280_RH_CORRECTION (8.0F)
 
 //
 // aux sensor selection
 //
 //#define testaux // testing aux sensors - infinite loop in setup()
 //#define USE_MCP9808
-#define USE_AM2320
+//#define USE_AM2320
 #define USE_BME280
 #define BME280_LOW_POWER // put BME280 to sleep between readings
 #define BME280_I2C_ADDR 0x76
