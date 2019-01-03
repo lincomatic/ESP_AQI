@@ -21,6 +21,10 @@ Pmsx003 pms1(PIN_RX1, PIN_TX);
 Pmsx003 pms2(PIN_RX2, PIN_TX);
 #endif // PIN_RX2
 
+#ifdef OLED128X64
+#include <SSD1306Ascii.h>
+#include <SSD1306AsciiWire.h>
+#endif //OLED128X64
 
 //
 // aux sensor
@@ -64,6 +68,9 @@ AUX_DATA g_auxData;
 unsigned long lastUpdateMs = 0UL;
 unsigned long updateWaitMs = 0UL;
 char g_sTmp[512];
+#ifdef OLED128X64
+SSD1306AsciiWire g_oled;
+#endif //OLED128X64
 
 
 const auto n = Pmsx003::Reserved;
@@ -265,11 +272,24 @@ void setup(void)
   Serial.begin(115200);
   while (!Serial) {};
 
+  Wire.begin();
+  Wire.setClock(400000L); //Increase to fast I2C speed!
+
+#ifdef OLED128X64
+  g_oled.begin(&Adafruit128x64, OLED_I2C_ADDR);
+  g_oled.setFont(Arial14);
+  g_oled.clear();
+#endif // OLED128X64
+
 #ifdef PIN_FACTORY_RESET
   btnReset.init();
 #endif
   
 #ifdef WIFI_MGR
+#ifdef OLED128X64
+  g_oled.print("configuring\nWiFi...");
+#endif // OLED128X64
+
   EEPROM.begin(g_wfCfg.getConfigSize());  
 
   // display the MAC on Serial
@@ -288,12 +308,28 @@ void setup(void)
 #endif
   
 
+#ifdef OLED128X64
+  g_oled.clear();
+
+  g_oled.println("SSID:");
+  g_oled.println(WiFi.SSID());
+  g_oled.print("IP: "); g_oled.println(WiFi.localIP());
+  uint8_t mac[WL_MAC_ADDR_LENGTH];
+  WiFi.softAPmacAddress(mac);
+
+  g_oled.print("MA: ");
+  for (int i = 0; i < 5; i++){
+    g_oled.print(mac[i], HEX);
+    g_oled.print(":");
+  }
+  g_oled.println(mac[5],HEX);
+#endif //OLED128X64
+
 #ifdef USE_AM2320 
   am2320.begin();
 #endif //USE_AM2320
 
 #ifdef USE_BME280
-  Wire.begin();
   bme280.setI2CAddress(BME280_I2C_ADDR);
   if (!bme280.beginI2C()) {
     Serial.println("BME280 connect failed");
@@ -393,6 +429,28 @@ void loop(void)
   pmsx003sleep();
 #endif // PMS_SLEEP_WAKEUP_WAIT
   ReadAux();
+
+#ifdef OLED128X64
+  g_oled.clear();
+  sprintf(g_sTmp,"PM2.5: %d %d",data[Pmsx003::PM2dot5],data[Pmsx003::PM2dot5CF1]);
+  g_oled.println(g_sTmp);
+#ifdef USE_BME280
+  g_auxData.btemp = 45.6;
+  g_auxData.brh = 36.5;
+  g_auxData.airPressure = 99999.59;
+  if (g_auxData.btemp != TEMPERATURE_NOT_INSTALLED) {
+    sprintf(g_sTmp,"Temp: %0.1fF",g_auxData.btemp*OLED_BME280_TEMP_CORRECTION);
+    g_oled.println(g_sTmp);
+    float rh = g_auxData.brh + OLED_BME280_RH_CORRECTION;
+    if (rh < 0.0F) rh = 0.0F;
+    else if (rh > 100.0F) rh = 100.0F;
+    sprintf(g_sTmp,"Rh: %0.0f%%",rh);
+    g_oled.println(g_sTmp);
+    sprintf(g_sTmp,"AP: %0.2f in",g_auxData.airPressure*0.0002952998751);
+    g_oled.println(g_sTmp);
+  }
+#endif //USE_BME280
+#endif // OLED128X64
     
 #ifdef API_WRITEKEY_LEN
   if (*g_ApiWriteKey) {
