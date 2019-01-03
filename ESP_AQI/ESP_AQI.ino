@@ -194,12 +194,12 @@ void ReadAux()
   if (bme280Present) {
 #ifdef BME280_LOW_POWER
     bme280.setMode(MODE_FORCED); //Wake up sensor and take reading
-    //  long startTime = millis();
-    while (bme280.isMeasuring() == false); //Wait for sensor to start measurment
-    while (bme280.isMeasuring() == true) delay(1); //Hang out while sensor completes the reading    
+    unsigned long st = millis();
+    while ((bme280.isMeasuring() == false) && ((millis()-st) < 250UL)); //Wait for sensor to start measurment
+    while ((bme280.isMeasuring() == true) && ((millis()-st) < 250UL))) delay(1); //Hang out while sensor completes the reading    
     //  long endTime = millis();
     //  Serial.print(" Measure time(ms): ");
-    //  Serial.print(endTime - startTime);
+    //  Serial.print(endTime - st);
 #endif //BME280_LOW_POWER
     
     // N.B. *MUST* read temperature before pressure to load t_fine variable
@@ -349,7 +349,6 @@ void setup(void)
   mcp9808.begin();
 #endif //USE_MCP9808
 
-  Wire.setClock(400000); //Increase to fast I2C speed!
 
 #ifdef testaux
   while (1) ReadAux();
