@@ -212,6 +212,18 @@ void ReadAux()
     g_auxData.airPressure = bme280.readFloatPressure();
     sprintf(g_sTmp, "BME280: temp %f F, rh: %f %%, pressure: %f", g_auxData.btemp, g_auxData.brh, g_auxData.airPressure);
     Serial.println(g_sTmp);
+#ifdef OLED128X64
+    g_oled.clear();
+    sprintf(g_sTmp,"T: %0.1fF",g_auxData.btemp);
+    g_oled.println(g_sTmp);
+    float rh = g_auxData.brh;
+    if (rh < 0.0F) rh = 0.0F;
+    else if (rh > 100.0F) rh = 100.0F;
+    sprintf(g_sTmp,"RH: %0.0f%%",rh);
+    g_oled.println(g_sTmp);
+    sprintf(g_sTmp,"AP: %0.2f in",g_auxData.airPressure*0.0002952998751);
+    g_oled.println(g_sTmp);
+#endif // OLED128X64
   }
   else {
     g_auxData.btemp = TEMPERATURE_NOT_INSTALLED;
@@ -434,7 +446,7 @@ void loop(void)
   g_oled.println(g_sTmp);
 #ifdef USE_BME280
   if (g_auxData.btemp != TEMPERATURE_NOT_INSTALLED) {
-    sprintf(g_sTmp,"Temp: %0.1fF",g_auxData.btemp+OLED_BME280_TEMP_CORRECTION);
+    sprintf(g_sTmp,"T: %0.1fF",g_auxData.btemp+OLED_BME280_TEMP_CORRECTION);
     g_oled.println(g_sTmp);
     float rh = g_auxData.brh+OLED_BME280_RH_CORRECTION;
     if (rh < 0.0F) rh = 0.0F;
@@ -444,7 +456,17 @@ void loop(void)
     sprintf(g_sTmp,"AP: %0.2f in",g_auxData.airPressure*0.0002952998751);
     g_oled.println(g_sTmp);
   }
-#endif //USE_BME280
+#elif defined(USE_AM2320)
+  if (g_auxData.btemp != TEMPERATURE_NOT_INSTALLED) {
+    sprintf(g_sTmp,"T: %0.1fF",g_auxData.atemp+OLED_AM2320_TEMP_CORRECTION);
+    g_oled.println(g_sTmp);
+    float rh = g_auxData.arh+OLED_AM2320_RH_CORRECTION;
+    if (rh < 0.0F) rh = 0.0F;
+    else if (rh > 100.0F) rh = 100.0F;
+    sprintf(g_sTmp,"RH: %0.0f%%",rh);
+    g_oled.println(g_sTmp);
+  }
+#endif //USE_AM2320
 #endif // OLED128X64
     
 #ifdef API_WRITEKEY_LEN
