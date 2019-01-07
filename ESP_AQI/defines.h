@@ -36,9 +36,15 @@
 //#define THINGSPEAK
 #define EMONCMS
 
+#ifndef UPDATE_INTERVAL_MS
 #define UPDATE_INTERVAL_MS (5UL * 60UL * 1000UL)
+#endif //UPDATE_INTERVAL_MS
+
+
 // delay after wake up before taking a reading - to give PMS time to stabilize
+#ifndef PMS_SLEEP_WAKEUP_WAIT
 #define PMS_SLEEP_WAKEUP_WAIT 32000UL
+#endif // PMS_SLEEP_WAKEUP_WAIT
 
 #ifdef THINGSPEAK
 #define API_WRITEKEY_LEN 16
