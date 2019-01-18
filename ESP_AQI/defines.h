@@ -1,8 +1,9 @@
 #ifndef _DEFINES_H_
 
 
-//#define AQI0 // dual channel no OLED
-#define AQI1 // single channel w/ OLED
+#define AQI0 // dual channel no OLED
+//#define AQI1 // single channel w/ OLED
+//#define MCP9808FEED // temp feed only
 
 
 #ifdef AQI0
