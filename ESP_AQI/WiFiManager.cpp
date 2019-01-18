@@ -1413,7 +1413,7 @@ void WiFiManager::handleInfo() {
 
   //@todo convert to enum or refactor to strings
   #ifdef ESP8266
-    infos = 27;
+    infos = 29;
     String infoids[] = {
       F("esphead"),
       F("uptime"),
@@ -1442,6 +1442,7 @@ void WiFiManager::handleInfo() {
       F("stamac"),
       F("conx"),
       F("rssi"),
+      F("gets"),
       F("autoconx")
     };
 
@@ -1664,6 +1665,11 @@ String WiFiManager::getInfoData(String id){
   else if(id==F("rssi")){
     p = FPSTR(HTTP_INFO_rssi);
     p.replace(FPSTR(T_1),(String)WiFi.RSSI());
+  }
+  else if(id==F("gets")){
+    extern char g_sHttpStr[];
+    p = FPSTR(HTTP_INFO_gets);
+    p.replace(FPSTR(T_1),(String)g_sHttpStr);
   }
   #ifdef ESP8266
   else if(id==F("autoconx")){

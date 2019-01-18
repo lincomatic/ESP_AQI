@@ -68,6 +68,7 @@ AUX_DATA g_auxData;
 unsigned long lastUpdateMs = 0UL;
 unsigned long updateWaitMs = 0UL;
 char g_sTmp[512];
+char g_sHttpStr[512];
 #ifdef OLED128X64
 SSD1306AsciiWire g_oled;
 #endif //OLED128X64
@@ -472,6 +473,7 @@ void loop(void)
 #ifdef API_WRITEKEY_LEN
   if (*g_ApiWriteKey) {
     *g_sTmp = 0;
+    *g_sHttpStr = 0;
       
 #ifdef THINGSPEAK
     sprintf(g_sTmp,"http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%d&field3=%d",g_ApiWriteKey,data[Pmsx003::PM1dot0],data[Pmsx003::PM2dot5],data[Pmsx003::PM10dot0]);
@@ -528,11 +530,13 @@ void loop(void)
 	HTTPClient http;
 	http.setUserAgent("ESP_AQI/1.0");
 	http.begin(g_sTmp);
+	strcpy(g_sHttpStr,g_sTmp);
 	//	http.begin("http://www.google.com/gg");
 	int hrc = http.GET(); // send request
 	Serial.print("return code: ");Serial.println(hrc);
 	String hresp = http.getString(); // get payload
 	Serial.print("response data: ");Serial.println(hresp);
+	sprintf(g_sHttpStr+strlen(g_sHttpStr),"<br>rc: %d",hrc);
 	http.end();
 	mydelay(250);
 	if (hrc > 0) break;
