@@ -1,6 +1,9 @@
 #include "./WiFiManager.h"          // https://github.com/tzapu/WiFiManager
 
 typedef struct config_parms {
+  char ssid[33]; // must have length+1 as w/ strings_xx.h
+  char pass[65]; // must have same length+1 as w/ strings_xx.h
+  //---- below additions to configuration form
   char apiwritekey[17];
   char staticIP[16]; // optional static IP
   char staticGW[16]; // optional static gateway
@@ -144,6 +147,11 @@ void WifiConfigurator::StartManager(void)
   //fetches ssid and pass and tries to connect
   //if it does not connect it starts an access point with the specified name
   //and goes into a blocking loop awaiting configuration
+  Serial.print("***");Serial.println(getUniqueSystemName().c_str());
+  if (configParms.ssid[0] && configParms.pass[0]) {
+    // set stored ssid/pass
+    WiFi.begin(configParms.ssid,configParms.pass);
+  }
   if (!wifiManager.autoConnect(getUniqueSystemName().c_str())) {
     Serial.println("timed out and failed to connect");
     Serial.println("rebooting...");
@@ -152,6 +160,21 @@ void WifiConfigurator::StartManager(void)
     //   we never get here.
   }
 
+  if (*wifiManager.getNewSSID() && *wifiManager.getNewPass()) {
+    if (strlen(wifiManager.getNewSSID()) >= sizeof(configParms.ssid)) {
+      // shouldn't get here if # chars in form is <= struct size
+      Serial.print("SSID too long: ");Serial.println(wifiManager.getNewSSID());
+    }
+    else if (strlen(wifiManager.getNewPass()) >= sizeof(configParms.pass)) {
+      // shouldn't get here if # chars in form is <= struct size
+      Serial.print("Pass too long: ");Serial.println(wifiManager.getNewPass());
+    }
+    else {
+      strcpy(configParms.ssid,wifiManager.getNewSSID());
+      strcpy(configParms.pass,wifiManager.getNewPass());
+      shouldSaveConfig = true;
+    }
+  }
   //everything below here is only executed once we are connected to a wifi.
 
   //if you get here you have connected to the WiFi
@@ -253,6 +276,26 @@ void WifiConfigurator::readCfg()
   resetConfigParms();
 
   uint8_t len = EEPROM.read(eepidx++);
+  if ((len > 0) && (len < sizeof(configParms.ssid))) {
+    for (i=0;i < len;i++) {
+      configParms.ssid[i] = EEPROM.read(eepidx++);
+    }
+    configParms.ssid[i] = 0;
+    Serial.print("ssid: ");Serial.println(configParms.ssid);
+  }
+  else configParms.ssid[0] = 0;
+
+  len = EEPROM.read(eepidx++);
+  if ((len > 0) && (len < sizeof(configParms.pass))) {
+    for (i=0;i < len;i++) {
+      configParms.pass[i] = EEPROM.read(eepidx++);
+    }
+    configParms.pass[i] = 0;
+    Serial.print("pass: ");Serial.println(configParms.pass);
+  }
+  else configParms.pass[0] = 0;
+
+  len = EEPROM.read(eepidx++);
   if ((len == 0) || (len >= sizeof(configParms.apiwritekey))) {
     // assume uninitialized
     resetit = 1;

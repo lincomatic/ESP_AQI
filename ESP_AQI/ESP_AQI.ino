@@ -529,9 +529,9 @@ void loop(void)
 	backgroundTasks();
 	HTTPClient http;
 	http.setUserAgent("ESP_AQI/1.0");
+	//	strcpy(g_sTmp,"http://www.google.com/gg");
 	http.begin(g_sTmp);
 	strcpy(g_sHttpStr,g_sTmp);
-	//	http.begin("http://www.google.com/gg");
 	int hrc = http.GET(); // send request
 	Serial.print("return code: ");Serial.println(hrc);
 	String hresp = http.getString(); // get payload

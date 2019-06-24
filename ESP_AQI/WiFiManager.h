@@ -289,6 +289,8 @@ class WiFiManager
 
     void setupWebServer();
     void handleWebServer() { server->handleClient(); }
+	const char *getNewSSID() { return _ssid.c_str(); }
+	const char *getNewPass() { return _ssid.c_str(); }
 
   private:
     std::vector<uint8_t> _menuIds;
@@ -429,6 +431,7 @@ class WiFiManager
     bool          WiFi_scanNetworks(unsigned int cachetime);
     void          WiFi_scanComplete(int networksFound);
     bool          WiFiSetCountry();
+
 
     #ifdef ESP32
     void   WiFiEvent(WiFiEvent_t event, system_event_info_t info);
