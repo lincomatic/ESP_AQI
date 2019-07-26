@@ -183,6 +183,8 @@ void WifiConfigurator::StartManager(void)
   Serial.println(WiFi.SSID());
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+  Serial.println("Turning off AP");
+  WiFi.mode(WIFI_STA);
   
   // this is true if we come from the GUI and clicked "save"
   // the flag is created in the callback above..
