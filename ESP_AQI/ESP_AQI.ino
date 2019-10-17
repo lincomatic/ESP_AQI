@@ -458,7 +458,7 @@ void loop(void)
     g_oled.println(g_sTmp);
   }
 #elif defined(USE_AM2320)
-  if (g_auxData.btemp != TEMPERATURE_NOT_INSTALLED) {
+  if (g_auxData.atemp != TEMPERATURE_NOT_INSTALLED) {
     sprintf(g_sTmp,"T: %0.1fF",g_auxData.atemp+OLED_AM2320_TEMP_CORRECTION);
     g_oled.println(g_sTmp);
     float rh = g_auxData.arh+OLED_AM2320_RH_CORRECTION;
