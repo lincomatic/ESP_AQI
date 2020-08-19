@@ -96,6 +96,9 @@ void reboot()
   WiFi.disconnect();
   delay(1000);
   ESP.reset();
+#ifdef USE_BME280
+  bme280.reset();
+#endif
 }
 
 
@@ -419,7 +422,7 @@ void loop(void)
   digitalWrite(PIN_LED,LOW); // onboard LED on
 #endif // PIN_LED
 
-#ifdef PMS_SLEEP_WAKEUP_WAIT
+#if (PMS_SLEEP_WAKEUP_WAIT != 0)
   pmsx003wake();
   // wait for PMS to stabilize
   mydelay(PMS_SLEEP_WAKEUP_WAIT);
@@ -436,7 +439,7 @@ void loop(void)
   backgroundTasks();
 #endif // PIN_RX2
 
-#ifdef PMS_SLEEP_WAKEUP_WAIT
+#if (PMS_SLEEP_WAKEUP_WAIT != 0)
   pmsx003sleep();
 #endif // PMS_SLEEP_WAKEUP_WAIT
   ReadAux();
@@ -519,8 +522,12 @@ void loop(void)
     }
 #endif // USE_MCP9808
 
+#ifndef NORSSI
       if (strlen(g_sTmp) > baselen) strcat(g_sTmp,",");
-	sprintf(g_sTmp+strlen(g_sTmp),"rssi:%d}&apikey=%s",WiFi.RSSI(),EMONCMS_WRITE_KEY);
+      sprintf(g_sTmp+strlen(g_sTmp),"rssi:%d",WiFi.RSSI());
+#endif // NORSSI
+
+      sprintf(g_sTmp+strlen(g_sTmp),"}&apikey=%s",EMONCMS_WRITE_KEY);
 
 #endif // EMONCMS
     if (*g_sTmp) {
@@ -559,6 +566,7 @@ void loop(void)
   Serial.print("last update interval: ");Serial.println(curms - lastUpdateMs);
   lastUpdateMs = curms;
   updateWaitMs = UPDATE_INTERVAL_MS - waitms;
+  if (updateWaitMs > UPDATE_INTERVAL_MS) updateWaitMs = 0;
   Serial.print("waiting updateWaitMs: ");Serial.println(updateWaitMs);
   mydelay(updateWaitMs);
 }
